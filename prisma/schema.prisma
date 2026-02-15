@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN") // ADMIN, MANUFACTURER
+  karigarId String?
+  karigar   Karigar? @relation(fields: [karigarId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Party {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  gst       String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+}
+
+model Karigar {
+  id             String   @id @default(uuid())
+  name           String
+  phone          String?
+  location       String?
+  specialization String? // e.g. Ring, Earring, etc.
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  orders         Order[]
+  users          User[]
+  ledger         KarigarLedger?
+}
+
+model Order {
+  id             Int          @id @default(autoincrement())
+  partyId        String
+  karigarId      String
+  party          Party        @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  karigar        Karigar      @relation(fields: [karigarId], references: [id], onDelete: Cascade)
+  
+  deliveryDate   DateTime
+  quantity       Int          @default(1)
+  weight         Float
+  partyOrderNo   String?
+  
+  itemCategory   String       // Ring, Pendant, Earring, etc.
+  purity         String       // 18K, 14K, 22K, Melting
+  size           String?
+  screwType      String?      // North, South, East, West
+  
+  remarks        String?
+  
+  status         String       @default("ISSUED") // ISSUED, RECEIVED, COMPLETED
+  
+  images         OrderImage[]
+  diamondEntries DiamondEntry[]
+  
+  // Phase 2: New Fields
+  issueDate      DateTime     @default(now())
+  goldColor      String?      // Yellow, Rose, White
+  isRateBooked   Boolean      @default(false)
+  bookedRate     Float?
+  cadFileUrl     String?      // .3dm or .stl file path (Keep for reference)
+  cadFileContent String?      // Base64 encoded file content
+  
+  // Pendant Chain Options
+  hasChain       Boolean      @default(false)
+  chainLength    String?      // 16", 18", 20"
+
+  actualDeliveryDate DateTime? // Precision performance tracking
+
+  // Phase 10: Material Tracking
+  materialIssued OrderMaterialIssued?
+  materialUsed   OrderMaterialUsed?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model OrderImage {
+  id        String   @id @default(uuid())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  createdAt DateTime @default(now())
+}
+
+model DiamondEntry {
+  id        String   @id @default(uuid())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  shape     String?
+  sizeMM    String?
+  sieveSize String?
+  pieces    Int      @default(0)
+  weight    Float    @default(0.0)
+  
+  createdAt DateTime @default(now())
+}
+
+// Phase 10: New Models
+
+model OrderMaterialIssued {
+  id        String   @id @default(uuid())
+  orderId   Int      @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Gold Details
+  purity    String   // 18K, 14K, 22K
+  melting   Float    // %
+  goldColor String   // Yellow, Rose, White
+  weight    Float    // Approx Weight (gm)
+
+  diamondEntries IssuedDiamondEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model IssuedDiamondEntry {
+  id               String   @id @default(uuid())
+  materialIssuedId String
+  materialIssued   OrderMaterialIssued @relation(fields: [materialIssuedId], references: [id], onDelete: Cascade)
+
+  shape     String?
+  sizeMM    String?
+  sieveSize String?
+  pieces    Int      @default(0)
+  weight    Float    @default(0.0)
+}
+
+model OrderMaterialUsed {
+  id        String   @id @default(uuid())
+  orderId   Int      @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Gold Usage
+  usedWeight      Float
+  wastage         Float
+  finalMelting    Float
+  finalColor      String
+  
+  // Final Product
+  finalProductWeight Float
+
+  diamondEntries UsedDiamondEntry[]
+
+  usageDate DateTime @default(now())
+  remarks   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UsedDiamondEntry {
+  id             String   @id @default(uuid())
+  materialUsedId String
+  materialUsed   OrderMaterialUsed @relation(fields: [materialUsedId], references: [id], onDelete: Cascade)
+  
+  shape     String?
+  sizeMM    String?
+  sieveSize String?
+  
+  usedPieces  Int     @default(0)
+  finalWeight Float   @default(0.0)
+}
+
+model KarigarLedger {
+  id        String   @id @default(uuid())
+  karigarId String   @unique
+  karigar   Karigar  @relation(fields: [karigarId], references: [id], onDelete: Cascade)
+
+  totalGoldIssued Float @default(0)
+  totalGoldUsed   Float @default(0)
+  totalWastage    Float @default(0)
+  
+  totalDiamondPcsIssued Int @default(0)
+  totalDiamondWtIssued Float @default(0)
+  
+  totalDiamondPcsUsed Int @default(0)
+  totalDiamondWtUsed Float @default(0)
+
+  lastUpdated DateTime @default(now())
+}
+
